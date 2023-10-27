@@ -1,5 +1,7 @@
 package edu.telegrambots.myfirstbot.service;
 
+import com.vdurmont.emoji.Emoji;
+import com.vdurmont.emoji.EmojiParser;
 import edu.telegrambots.myfirstbot.config.BotConfig;
 import edu.telegrambots.myfirstbot.model.User;
 import edu.telegrambots.myfirstbot.model.UserRepository;
@@ -16,6 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +30,13 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Autowired
     private UserRepository userRepository;
     final BotConfig config;
-    static final String HELP_TEXT = "Самый быстрый и доступный частный VPN Blitz\n" +
+    static final String USER_DATA_TEMPLATE = "Ваши данные:%n%n" +
+            "ID чата: %d%n" +
+            "Имя: %s%n" +
+            "Фамилия: %s%n" +
+            "Имя пользователя: %s%n" +
+            "Время последней регистрации в боте: %s";
+    static final String HELP_TEXT = "Самый быстрый и доступный частный :zap:VPN Blitz:zap:\n" +
             "Для подключения обращайтесь в личные сообщения @VPN_Blitz\n\n" +
             "Вы можете использовать команды из главного меню слева или набирать их вручную:\n\n" +
             "Наберите /start, чтобы увидеть приветственное сообщение\n\n" +
@@ -65,6 +74,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                     startMessageReceived(chatId, update.getMessage().getChat().getFirstName(), update.getMessage().getChat().getUserName());
                     registerUser(update.getMessage());
                     break;
+                case "/mydata":
+                    myDataMessageReceived(chatId, update.getMessage().getChat().getUserName());
+                    break;
                 case "/help":
                     helpMessageReceived(chatId, update.getMessage().getChat().getUserName());
                     break;
@@ -73,6 +85,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
+
 
     private void registerUser(Message msg) {
         if (userRepository.findById(msg.getChatId()).isEmpty()) {
@@ -98,8 +111,25 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendMessage(chatId, startResponse);
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
+
+    private void myDataMessageReceived(long chatId, String userName) {
+        if (userRepository.findById(chatId).isEmpty()) {
+            sendMessage(chatId, "Записей о Ваших данных не обнаружено");
+        } else {
+            User user = userRepository.findById(chatId).get();
+            var date = new Date(user.getRegisteredAt().getTime());
+            // FIXME
+            System.out.println(user.getRegisteredAt().getTime());
+            System.out.println(date);
+
+            sendMessage(chatId, String.format(USER_DATA_TEMPLATE, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
+        }
+
+        log.info("Replied to MYDATA command from user https://t.me/" + userName + " with chatId = " + chatId);
+    }
+
     private void helpMessageReceived(long chatId, String userName) {
-        sendMessage(chatId, HELP_TEXT);
+        sendMessage(chatId, EmojiParser.parseToUnicode(HELP_TEXT));
         log.info("Replied to HELP command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
 
