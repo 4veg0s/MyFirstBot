@@ -2,7 +2,6 @@ package edu.telegrambots.myfirstbot.model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import org.glassfish.grizzly.http.util.TimeStamp;
 
 import java.sql.Timestamp;
 
