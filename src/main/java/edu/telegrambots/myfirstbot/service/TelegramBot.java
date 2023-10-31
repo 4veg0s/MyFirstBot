@@ -32,6 +32,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Autowired
     private UserRepository userRepository;
     final BotConfig config;
+
+    List<Long> superUsers;
     static final String USER_DATA_TEMPLATE = "Ваши данные:%n%n" +
             "ID чата: %d%n" +
             "Имя: %s%n" +
@@ -55,6 +57,10 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     public TelegramBot(BotConfig config) {
         this.config = config;
+
+        superUsers = new ArrayList<>();
+        superUsers.add((long) 416657716);   // Андрей
+
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "начать общение"));
         listOfCommands.add(new BotCommand("/mydata", "просмотреть собранные данные"));
@@ -129,8 +135,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         String messageText = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
 
-        if (messageText.contains("/all") && config.getBotSuperusers().contains(chatId)) {
-            sendToEveryoneMessageReceived(chatId, update.getMessage().getChat().getUserName(), messageText);
+        if (messageText.contains("/all")) {
+            if (superUsers.contains(chatId)) {
+                sendToEveryoneMessageReceived(chatId, update.getMessage().getChat().getUserName(), messageText);
+            } else {
+                sendMessage(chatId, "Вы не имеете доступа к этой команде");
+            }
         } else {
             sendMessage(chatId, "К сожалению, я пока не умею обрабатывать данную команду :(");
         }
@@ -284,7 +294,4 @@ public class TelegramBot extends TelegramLongPollingBot {
         return config.getBotToken();
     }
 
-    public ArrayList<Long> getBotSuperusers() {
-        return config.getBotSuperusers();
-    }
 }

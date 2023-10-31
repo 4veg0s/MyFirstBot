@@ -16,7 +16,4 @@ public class BotConfig {
     String botName;
     @Value("${bot.token}")
     String botToken;
-    // TODO: реализовать возможность задавать множество суперпользователей в application.properties
-    @Value("${bot.superusers}")
-    ArrayList<Long> botSuperusers;
 }
