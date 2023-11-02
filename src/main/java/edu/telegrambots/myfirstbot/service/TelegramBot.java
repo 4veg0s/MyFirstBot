@@ -113,11 +113,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     message.setMessageId(messageId);
                     if (userRepository.findById(chatId).isEmpty()) {
                         message.setText("Ваши данные были успешно удалены");
-                        sendMessageExecute(message);
+                        executeMessage(message);
                         log.info("Successfully deleted data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
                     } else {
                         message.setText("При удалении ваших данных произошла ошибка");
-                        sendMessageExecute(message);
+                        executeMessage(message);
                         log.error("Error occurred while attempting to delete data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
                     }
                     break;
@@ -125,7 +125,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     message.setChatId(chatId);
                     message.setMessageId(messageId);
                     message.setText("Ваши данные не были удалены");
-                    sendMessageExecute(message);
+                    executeMessage(message);
                     break;
             }
         }
@@ -176,7 +176,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void startMessageReceived(long chatId, String name, String userName) {
         String startResponse = String.format(START_TEXT, name, userName);
 
-        sendMessage(chatId, startResponse);
+        sendMessage(chatId, startResponse, keyboardMarkup());
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
 
@@ -225,7 +225,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         message.setReplyMarkup(inlineKeyboardMarkup);
 
-        sendMessageExecute(message);
+        executeMessage(message);
     }
 
     private void helpMessageReceived(long chatId, String userName) {
@@ -237,12 +237,20 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(textToSend);
-        message.setReplyMarkup(keyboardMarkup());
 
-        sendMessageExecute(message);
+        executeMessage(message);
     }
 
-    private void sendMessageExecute(SendMessage message) {
+    private void sendMessage(long chatId, String textToSend, ReplyKeyboardMarkup keyboardMarkup) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId);
+        message.setText(textToSend);
+        message.setReplyMarkup(keyboardMarkup);
+
+        executeMessage(message);
+    }
+
+    private void executeMessage(SendMessage message) {
         try {
             execute(message);
             log.info("Message sent successfully to user with chatId = " + message.getChatId());
@@ -251,7 +259,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessageExecute(EditMessageText message) {
+    private void executeMessage(EditMessageText message) {
         try {
             execute(message);
             log.info("Message sent successfully to user with chatId = " + message.getChatId());
@@ -264,8 +272,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setResizeKeyboard(true);
         keyboardMarkup.setSelective(true);
-        keyboardMarkup.setIsPersistent(true);
-        keyboardMarkup.setOneTimeKeyboard(false);
+        keyboardMarkup.setIsPersistent(false);
+        keyboardMarkup.setOneTimeKeyboard(true);
 
         List<KeyboardRow> keyboardRows = new ArrayList<>();
         KeyboardRow row1 = new KeyboardRow();
