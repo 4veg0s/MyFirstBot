@@ -84,21 +84,20 @@ public class TelegramBot extends TelegramLongPollingBot {
             long chatId = update.getMessage().getChatId();
 
             switch (messageText) {
-                case "/start":
+                case "/start" -> {
                     startMessageReceived(chatId, update.getMessage().getChat().getFirstName(), update.getMessage().getChat().getUserName());
                     registerUser(update.getMessage());
-                    break;
-                case "/mydata":
+                }
+                case "/mydata" -> {
                     myDataMessageReceived(chatId, update.getMessage().getChat().getUserName());
-                    break;
-                case "/deletemydata":
+                }
+                case "/deletemydata" -> {
                     deleteMyDataMessageReceived(chatId, update.getMessage().getChat().getUserName());
-                    break;
-                case "/help":
+                }
+                case "/help" -> {
                     helpMessageReceived(chatId, update.getMessage().getChat().getUserName());
-                    break;
-                default:
-                    unusualMessageReceived(update);
+                }
+                default -> unusualMessageReceived(update);
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
@@ -107,7 +106,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             EditMessageText message = new EditMessageText();
 
             switch (callbackData) {
-                case YES_DELETE_MY_DATA:
+                case YES_DELETE_MY_DATA -> {
                     userRepository.deleteById(chatId);
                     message.setChatId(chatId);
                     message.setMessageId(messageId);
@@ -120,13 +119,13 @@ public class TelegramBot extends TelegramLongPollingBot {
                         executeMessage(message);
                         log.error("Error occurred while attempting to delete data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
                     }
-                    break;
-                case NO_DELETE_MY_DATA:
+                }
+                case NO_DELETE_MY_DATA -> {
                     message.setChatId(chatId);
                     message.setMessageId(messageId);
                     message.setText("Ваши данные не были удалены");
                     executeMessage(message);
-                    break;
+                }
             }
         }
     }
