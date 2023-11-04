@@ -2,6 +2,7 @@ package edu.telegrambots.myfirstbot.service;
 
 import com.vdurmont.emoji.EmojiParser;
 import edu.telegrambots.myfirstbot.config.BotConfig;
+import edu.telegrambots.myfirstbot.enums.UserState;
 import edu.telegrambots.myfirstbot.model.User;
 import edu.telegrambots.myfirstbot.model.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -16,14 +17,15 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+
 
 @Slf4j
 @Component
@@ -47,13 +49,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             "Вы можете использовать команды из главного меню слева или набирать их вручную:\n\n" +
             "Наберите /start, чтобы увидеть приветственное сообщение\n\n" +
             "Наберите /mydata, чтобы увидеть собранные о Вас данные\n\n" +
-            "Наберите /deletemydata, чтобы удалить собранные о Вас данные\n\n" +
+            //"Наберите /deletemydata, чтобы удалить собранные о Вас данные\n\n" +
             "Наберите /help, чтобы увидеть это сообщение снова\n\n" +
             "Наберите /settings, чтобы изменить некоторые настройки бота\n(функционал в разработке)";
 
-    static final String YES_DELETE_MY_DATA = "YES_DELETE_MY_DATA";
-
-    static final String NO_DELETE_MY_DATA = "NO_DELETE_MY_DATA";
+//    static final String YES_DELETE_MY_DATA = "YES_DELETE_MY_DATA";
+//    static final String NO_DELETE_MY_DATA = "NO_DELETE_MY_DATA";
 
     public TelegramBot(BotConfig config) {
         this.config = config;
@@ -64,7 +65,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "начать общение"));
         listOfCommands.add(new BotCommand("/mydata", "просмотреть собранные данные"));
-        listOfCommands.add(new BotCommand("/deletemydata", "удалить собранные данные"));
+        //listOfCommands.add(new BotCommand("/deletemydata", "удалить собранные данные"));
         listOfCommands.add(new BotCommand("/help", "справочная информация о боте"));
         listOfCommands.add(new BotCommand("/settings", "персонализированная настройка"));
 
@@ -97,37 +98,81 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case "/help" -> {
                     helpMessageReceived(chatId, update.getMessage().getChat().getUserName());
                 }
+                case "/cancel" -> {
+                    cancelCommandReceived(chatId);
+                }
                 default -> unusualMessageReceived(update);
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
-            int messageId = update.getCallbackQuery().getMessage().getMessageId();
-            long chatId = update.getCallbackQuery().getMessage().getChatId();
-            EditMessageText message = new EditMessageText();
 
             switch (callbackData) {
-                case YES_DELETE_MY_DATA -> {
-                    userRepository.deleteById(chatId);
-                    message.setChatId(chatId);
-                    message.setMessageId(messageId);
-                    if (userRepository.findById(chatId).isEmpty()) {
-                        message.setText("Ваши данные были успешно удалены");
-                        executeMessage(message);
-                        log.info("Successfully deleted data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
-                    } else {
-                        message.setText("При удалении ваших данных произошла ошибка");
-                        executeMessage(message);
-                        log.error("Error occurred while attempting to delete data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
-                    }
+                case CallbackConstants.YES_DELETE_MY_DATA -> {
+                    confirmDeleteMyData(update);
                 }
-                case NO_DELETE_MY_DATA -> {
-                    message.setChatId(chatId);
-                    message.setMessageId(messageId);
-                    message.setText("Ваши данные не были удалены");
-                    executeMessage(message);
+                case CallbackConstants.NO_DELETE_MY_DATA -> {
+                    cancelDeleteMyData(update);
+                }
+                case CallbackConstants.YES_CANCEL -> {
+                    confirmCancel(update);
+                }
+                case CallbackConstants.NO_CANCEL -> {
+                    returnToCommand(update);
                 }
             }
         }
+    }
+
+    private void cancelDeleteMyData(Update update) {
+        EditMessageText message = new EditMessageText();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+
+        message.setChatId(chatId);
+        message.setMessageId(messageId);
+        message.setText("Ваши данные не были удалены");
+        executeMessage(message);
+    }
+
+    private void confirmDeleteMyData(Update update) {
+        EditMessageText message = new EditMessageText();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+
+        userRepository.deleteById(chatId);
+        message.setChatId(chatId);
+        message.setMessageId(messageId);
+        if (userRepository.findById(chatId).isEmpty()) {
+            message.setText("Ваши данные были успешно удалены");
+            executeMessage(message);
+            log.info("Successfully deleted data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
+        } else {
+            message.setText("При удалении ваших данных произошла ошибка");
+            executeMessage(message);
+            log.error("Error occurred while attempting to delete data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
+        }
+    }
+
+    private void returnToCommand(Update update) {
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        sendMessage(chatId, "Функционал в разработке");
+    }
+
+    private void confirmCancel(Update update) {
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        setUserState(chatId, UserState.BASIC_STATE);
+        sendMessage(chatId, "Команда отменена");
+    }
+
+    private void setUserState(long chatId, UserState state) {
+        var user = findUser(chatId);
+        user.setState(state);
+        userRepository.save(user);
+    }
+
+    private void cancelCommandReceived(long chatId) {
+        // TODO: Добавить редактирование сообщения после нажатия на клавиатуру
+        sendMessage(chatId, "Отменить команду?", yesNoInlineMarkup(CallbackConstants.YES_CANCEL, CallbackConstants.NO_CANCEL));
     }
 
     private void unusualMessageReceived(Update update) {
@@ -154,8 +199,18 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
+    private User findUser(long chatId) {
+        if (userRepository.findById(chatId).isEmpty()) {
+            return null;
+        }
+        else {
+            return userRepository.findById(chatId).get();
+        }
+    }
+
     private void registerUser(Message msg) {
-        if (userRepository.findById(msg.getChatId()).isEmpty()) {
+
+        if (findUser(msg.getChatId()) == null) {
             var chatId = msg.getChatId();
             var chat = msg.getChat();
 
@@ -165,17 +220,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             user.setFirstName(chat.getFirstName());
             user.setLastName(chat.getLastName());
             user.setUserName(chat.getUserName());
-            user.setRegisteredAt(new Timestamp(System.currentTimeMillis()));
-
+            user.setState(UserState.BASIC_STATE);
             userRepository.save(user);
             log.info("User saved: " + user);
         }
     }
 
+    private void changeUserGroup(long chatId) {
+        var user = findUser(chatId);
+
+    }
+
     private void startMessageReceived(long chatId, String name, String userName) {
         String startResponse = String.format(START_TEXT, name, userName);
 
-        sendMessage(chatId, startResponse, keyboardMarkup());
+        sendMessage(chatId, startResponse);
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
 
@@ -183,7 +242,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (userRepository.findById(chatId).isEmpty()) {
             sendMessage(chatId, "Записей о Ваших данных не обнаружено");
         } else {
-            User user = userRepository.findById(chatId).get();
+            User user = findUser(chatId);
             sendMessage(chatId, String.format(USER_DATA_TEMPLATE, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
         }
         log.info("Replied to MY_DATA command from user https://t.me/" + userName + " with chatId = " + chatId);
@@ -193,27 +252,23 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (userRepository.findById(chatId).isEmpty()) {
             sendMessage(chatId, "Записей о Ваших данных не обнаружено");
         } else {
-            confirmDeleteMyData(chatId);
+            sendMessage(chatId, "Вы уверены, что хотите удалить ваши данные из бота?", yesNoInlineMarkup(CallbackConstants.YES_DELETE_MY_DATA, CallbackConstants.NO_DELETE_MY_DATA));
         }
         log.info("Replied to DELETE_MY_DATA command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
 
-    private void confirmDeleteMyData(long chatId) {
-        SendMessage message = new SendMessage();
-        message.setText("Вы уверены, что хотите удалить ваши данные из бота?");
-        message.setChatId(chatId);
-
+    private InlineKeyboardMarkup yesNoInlineMarkup(String callbackNameYes, String callbackNameNo) {
         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
         List<InlineKeyboardButton> row = new ArrayList<>();
 
         var yesButton = new InlineKeyboardButton();
         yesButton.setText("Да");
-        yesButton.setCallbackData(YES_DELETE_MY_DATA);
+        yesButton.setCallbackData(callbackNameYes);
 
         var noButton = new InlineKeyboardButton();
         noButton.setText("Нет");
-        noButton.setCallbackData(NO_DELETE_MY_DATA);
+        noButton.setCallbackData(callbackNameNo);
 
         row.add(yesButton);
         row.add(noButton);
@@ -222,9 +277,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         inlineKeyboardMarkup.setKeyboard(rowsInline);
 
-        message.setReplyMarkup(inlineKeyboardMarkup);
-
-        executeMessage(message);
+        return inlineKeyboardMarkup;
     }
 
     private void helpMessageReceived(long chatId, String userName) {
@@ -240,7 +293,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         executeMessage(message);
     }
 
-    private void sendMessage(long chatId, String textToSend, ReplyKeyboardMarkup keyboardMarkup) {
+    private void sendMessage(long chatId, String textToSend, ReplyKeyboard keyboardMarkup) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(textToSend);
