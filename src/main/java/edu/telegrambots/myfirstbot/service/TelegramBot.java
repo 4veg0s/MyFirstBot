@@ -4,6 +4,8 @@ import com.vdurmont.emoji.EmojiParser;
 import edu.telegrambots.myfirstbot.config.BotConfig;
 import edu.telegrambots.myfirstbot.enums.UserState;
 import edu.telegrambots.myfirstbot.model.User;
+import edu.telegrambots.myfirstbot.model.UserEduInfo;
+import edu.telegrambots.myfirstbot.model.UserEduInfoRepository;
 import edu.telegrambots.myfirstbot.model.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -33,28 +36,37 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private UserEduInfoRepository userEduInfoRepository;
     final BotConfig config;
 
     List<Long> superUsers;
-    static final String USER_DATA_TEMPLATE = "Ваши данные:%n%n" +
+    List<BotCommand> listOfCommands;
+    // TODO реализовать вывод данных из обоих таблиц
+    static final String MY_DATA_TEMPLATE = "Ваши данные:%n%n" +
             "ID чата: %d%n" +
             "Имя: %s%n" +
             "Фамилия: %s%n" +
-            "Имя пользователя: %s%n" +
+            "Имя пользователя: %s%n%n" +
+            // FIXME инфа о факультете и т.д.
             "Время последней регистрации в боте: %s";
+            /*"Факультет: %s%n" +
+            "Уровень образования: %s%n" +
+            "Курс: %d%n" +
+            "Группа: %s%n" +*/
     static final String START_TEXT = "Привет, %s! Или мне называть тебя @%s?%n%n" +
             "На данный момент бот может корректно реагировать только на команды, доступные из меню";
     static final String HELP_TEXT = "Самый быстрый и доступный частный VPN :zap:Blitz:zap:\n" +
             "Для подключения обращайтесь в личные сообщения @VPN_Blitz\n\n" +
             "Вы можете использовать команды из главного меню слева или набирать их вручную:\n\n" +
             "Наберите /start, чтобы увидеть приветственное сообщение\n\n" +
-            "Наберите /mydata, чтобы увидеть собранные о Вас данные\n\n" +
-            //"Наберите /deletemydata, чтобы удалить собранные о Вас данные\n\n" +
+            "Наберите /edit_edu_info, чтобы изменить информацию о факультете, курсе и группе\n\n" +
+            "Наберите /my_data, чтобы увидеть собранные о Вас данные\n\n" +
+            //"Наберите /delete_my_data, чтобы удалить собранные о Вас данные\n\n" +
             "Наберите /help, чтобы увидеть это сообщение снова\n\n" +
-            "Наберите /settings, чтобы изменить некоторые настройки бота\n(функционал в разработке)";
+            "Наберите /settings, чтобы изменить некоторые настройки бота\n(функционал в разработке)" +
+            "Наберите /cancel, чтобы отменить выполнение последней команды";
 
-//    static final String YES_DELETE_MY_DATA = "YES_DELETE_MY_DATA";
-//    static final String NO_DELETE_MY_DATA = "NO_DELETE_MY_DATA";
 
     public TelegramBot(BotConfig config) {
         this.config = config;
@@ -62,12 +74,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         superUsers = new ArrayList<>();
         superUsers.add((long) 416657716);   // Андрей
 
-        List<BotCommand> listOfCommands = new ArrayList<>();
+        listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "начать общение"));
-        listOfCommands.add(new BotCommand("/mydata", "просмотреть собранные данные"));
-        //listOfCommands.add(new BotCommand("/deletemydata", "удалить собранные данные"));
+        listOfCommands.add(new BotCommand("/edit_edu_info", "изменить учебную информацию"));
+        listOfCommands.add(new BotCommand("/my_data", "просмотреть собранные данные"));
+        //listOfCommands.add(new BotCommand("/delete_my_data", "удалить собранные данные"));
         listOfCommands.add(new BotCommand("/help", "справочная информация о боте"));
         listOfCommands.add(new BotCommand("/settings", "персонализированная настройка"));
+        listOfCommands.add(new BotCommand("/cancel", "отмена выполняемой команды"));
 
         try {
             this.execute(new SetMyCommands(listOfCommands, new BotCommandScopeDefault(), null));
@@ -86,17 +100,20 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             switch (messageText) {
                 case "/start" -> {
-                    startMessageReceived(chatId, update.getMessage().getChat().getFirstName(), update.getMessage().getChat().getUserName());
+                    startCommandReceived(chatId, update.getMessage().getChat().getFirstName(), update.getMessage().getChat().getUserName());
                     registerUser(update.getMessage());
                 }
-                case "/mydata" -> {
-                    myDataMessageReceived(chatId, update.getMessage().getChat().getUserName());
+                case "/edit_edu_info" -> {
+                    editEduInfoCommandReceived(chatId);
                 }
-                case "/deletemydata" -> {
+                case "/my_data" -> {
+                    myDataCommandReceived(chatId, update.getMessage().getChat().getUserName());
+                }
+                case "/delete_my_data" -> {
                     deleteMyDataMessageReceived(chatId, update.getMessage().getChat().getUserName());
                 }
                 case "/help" -> {
-                    helpMessageReceived(chatId, update.getMessage().getChat().getUserName());
+                    helpCommandReceived(chatId, update.getMessage().getChat().getUserName());
                 }
                 case "/cancel" -> {
                     cancelCommandReceived(chatId);
@@ -113,65 +130,198 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case CallbackConstants.NO_DELETE_MY_DATA -> {
                     cancelDeleteMyData(update);
                 }
+                case CallbackConstants.YES_FACULTY -> {
+                    confirmFaculty(update);
+                }
+                case CallbackConstants.NO_FACULTY -> {
+                    returnToFaculty(update);
+                }
                 case CallbackConstants.YES_CANCEL -> {
                     confirmCancel(update);
                 }
                 case CallbackConstants.NO_CANCEL -> {
                     returnToCommand(update);
                 }
+                default -> {
+                    if (CallbackConstants.FACULTY_FA.equals(callbackData) ||
+                            CallbackConstants.FACULTY_FCE.equals(callbackData) ||
+                            CallbackConstants.FACULTY_FEE_MS.equals(callbackData) ||
+                            CallbackConstants.FACULTY_FARB.equals(callbackData) ||
+                            CallbackConstants.FACULTY_FEM.equals(callbackData) ||
+                            CallbackConstants.FACULTY_FFLCT.equals(callbackData) ||
+                            CallbackConstants.FACULTY_IPTS.equals(callbackData) ||
+                            CallbackConstants.FACULTY_ICE.equals(callbackData)) {
+                        facultyReceived(update);
+                    }
+                }
             }
         }
     }
 
+    private void returnToFaculty(Update update) {
+        EditMessageText message = editMessage(update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), "Выбор отменен");
+        executeMessage(message);
+        editEduInfoCommandReceived(update.getCallbackQuery().getMessage().getChatId());
+    }
+
+    private void confirmFaculty(Update update) {
+        EditMessageText message;
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        String textToSend = "Факультет изменен на %s";
+        try {
+            String faculty = findUserInUserEduInfoRepository(chatId).getFaculty();
+            message = editMessage(chatId, messageId, String.format(textToSend, faculty));
+        } catch (NullPointerException exception) {
+            message = editMessage(chatId, messageId, "Ошибка изменения факультета");
+            log.error("Couldn't find user in userEduInfoRepository with chatId = " + chatId);
+        }
+        executeMessage(message);
+    }
+
+    private UserEduInfo findUserInUserEduInfoRepository(long chatId) {
+        if (userEduInfoRepository.findById(chatId).isEmpty()) {
+            return null;
+        } else {
+            return userEduInfoRepository.findById(chatId).get();
+        }
+    }
+
+    private void changeUserFaculty(long chatId, String faculty) {
+        var user = findUserInUserEduInfoRepository(chatId);
+        if (user != null) {
+            user.setFaculty(faculty);
+            userEduInfoRepository.save(user);
+        }
+    }
+
+    private void registerEduInfo(Message msg) {
+
+        if (findUserInUserRepository(msg.getChatId()) == null) {
+            var chatId = msg.getChatId();
+            var chat = msg.getChat();
+
+            User user = new User();
+
+            user.setChatId(chatId);
+            user.setFirstName(chat.getFirstName());
+            user.setLastName(chat.getLastName());
+            user.setUserName(chat.getUserName());
+            user.setState(UserState.BASIC_STATE);
+            userRepository.save(user);
+            log.info("User saved: " + user);
+        }
+    }
+
+    private void facultyReceived(Update update) {
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        String callbackData = update.getCallbackQuery().getData();
+        String textToSend = "Факультет %s, верно?";
+        String faculty = facultyCallbackToName(callbackData);
+        changeUserFaculty(chatId, faculty);
+
+        EditMessageText message = editMessage(chatId, messageId, String.format(textToSend, faculty), yesNoInlineMarkup(CallbackConstants.YES_FACULTY, CallbackConstants.NO_FACULTY));
+        executeMessage(message);
+    }
+
+    private String facultyCallbackToName(String callbackData) {
+        String faculty = "ОШИБКА";
+        switch (callbackData) {
+            case CallbackConstants.FACULTY_FA -> faculty = "АФ";
+            case CallbackConstants.FACULTY_FCE -> faculty = "СФ";
+            case CallbackConstants.FACULTY_FEE_MS -> faculty = "ФИЭиГХ";
+            case CallbackConstants.FACULTY_FARB -> faculty = "АДФ";
+            case CallbackConstants.FACULTY_FEM -> faculty = "ФЭУ";
+            case CallbackConstants.FACULTY_FFLCT -> faculty = "ФСЭиПСТ";
+            case CallbackConstants.FACULTY_IPTS -> faculty = "ИБФО";
+            case CallbackConstants.FACULTY_ICE -> faculty = "ИДО";
+        }
+        return faculty;
+    }
+
+    private void editEduInfoCommandReceived(long chatId) {
+        sendMessage(chatId, "Выберите факультет:", facultyInlineMarkup());
+    }
+
+    private InlineKeyboardMarkup facultyInlineMarkup() {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("АФ", CallbackConstants.FACULTY_FA))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("СФ", CallbackConstants.FACULTY_FCE))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ФИЭиГХ", CallbackConstants.FACULTY_FEE_MS))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("АДФ", CallbackConstants.FACULTY_FARB))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ФЭУ", CallbackConstants.FACULTY_FEM))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ФСЭиПСТ", CallbackConstants.FACULTY_FFLCT))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ИБФО", CallbackConstants.FACULTY_IPTS))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ИДО", CallbackConstants.FACULTY_ICE))));
+
+        keyboardMarkup.setKeyboard(rowsInline);
+
+        return keyboardMarkup;
+    }
+
+    private InlineKeyboardButton createInlineButton(String name, String callbackData) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(name);
+        button.setCallbackData(callbackData);
+
+        return button;
+    }
+
     private void cancelDeleteMyData(Update update) {
-        EditMessageText message = new EditMessageText();
         int messageId = update.getCallbackQuery().getMessage().getMessageId();
         long chatId = update.getCallbackQuery().getMessage().getChatId();
 
-        message.setChatId(chatId);
-        message.setMessageId(messageId);
-        message.setText("Ваши данные не были удалены");
+        EditMessageText message = editMessage(chatId, messageId, "Ваши данные не были удалены");
+
         executeMessage(message);
     }
 
     private void confirmDeleteMyData(Update update) {
-        EditMessageText message = new EditMessageText();
         int messageId = update.getCallbackQuery().getMessage().getMessageId();
         long chatId = update.getCallbackQuery().getMessage().getChatId();
 
         userRepository.deleteById(chatId);
-        message.setChatId(chatId);
-        message.setMessageId(messageId);
+        String textToSend;
         if (userRepository.findById(chatId).isEmpty()) {
-            message.setText("Ваши данные были успешно удалены");
-            executeMessage(message);
+            textToSend = "Ваши данные были успешно удалены";
             log.info("Successfully deleted data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
         } else {
-            message.setText("При удалении ваших данных произошла ошибка");
-            executeMessage(message);
+            textToSend = "При удалении ваших данных произошла ошибка";
             log.error("Error occurred while attempting to delete data of user https://t.me/" + update.getCallbackQuery().getMessage().getChat().getUserName() + " with chatId = " + chatId);
         }
+        EditMessageText message = editMessage(chatId, messageId, textToSend);
+        executeMessage(message);
     }
 
     private void returnToCommand(Update update) {
         long chatId = update.getCallbackQuery().getMessage().getChatId();
-        sendMessage(chatId, "Функционал в разработке");
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+
+        EditMessageText message = editMessage(chatId, messageId, "Возврат к команде");
+
+        executeMessage(message);
     }
 
     private void confirmCancel(Update update) {
         long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+
+        EditMessageText message = editMessage(chatId, messageId, "Команда отменена");
+
         setUserState(chatId, UserState.BASIC_STATE);
-        sendMessage(chatId, "Команда отменена");
+
+        executeMessage(message);
     }
 
     private void setUserState(long chatId, UserState state) {
-        var user = findUser(chatId);
+        var user = findUserInUserRepository(chatId);
         user.setState(state);
         userRepository.save(user);
     }
 
     private void cancelCommandReceived(long chatId) {
-        // TODO: Добавить редактирование сообщения после нажатия на клавиатуру
         sendMessage(chatId, "Отменить команду?", yesNoInlineMarkup(CallbackConstants.YES_CANCEL, CallbackConstants.NO_CANCEL));
     }
 
@@ -199,18 +349,17 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
 
-    private User findUser(long chatId) {
+    private User findUserInUserRepository(long chatId) {
         if (userRepository.findById(chatId).isEmpty()) {
             return null;
-        }
-        else {
+        } else {
             return userRepository.findById(chatId).get();
         }
     }
 
     private void registerUser(Message msg) {
 
-        if (findUser(msg.getChatId()) == null) {
+        if (findUserInUserRepository(msg.getChatId()) == null) {
             var chatId = msg.getChatId();
             var chat = msg.getChat();
 
@@ -223,27 +372,27 @@ public class TelegramBot extends TelegramLongPollingBot {
             user.setState(UserState.BASIC_STATE);
             userRepository.save(user);
             log.info("User saved: " + user);
+
+            UserEduInfo userEduInfo = new UserEduInfo();
+            userEduInfo.setChatId(chatId);
+            userEduInfoRepository.save(userEduInfo);
+            log.info("UserEduInfo saved: " + userEduInfo);
         }
     }
 
-    private void changeUserGroup(long chatId) {
-        var user = findUser(chatId);
-
-    }
-
-    private void startMessageReceived(long chatId, String name, String userName) {
+    private void startCommandReceived(long chatId, String name, String userName) {
         String startResponse = String.format(START_TEXT, name, userName);
 
-        sendMessage(chatId, startResponse);
+        sendMessage(chatId, startResponse, replyKeyboardMarkup());
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
 
-    private void myDataMessageReceived(long chatId, String userName) {
+    private void myDataCommandReceived(long chatId, String userName) {
         if (userRepository.findById(chatId).isEmpty()) {
             sendMessage(chatId, "Записей о Ваших данных не обнаружено");
         } else {
-            User user = findUser(chatId);
-            sendMessage(chatId, String.format(USER_DATA_TEMPLATE, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
+            User user = findUserInUserRepository(chatId);
+            sendMessage(chatId, String.format(MY_DATA_TEMPLATE, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
         }
         log.info("Replied to MY_DATA command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
@@ -280,7 +429,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return inlineKeyboardMarkup;
     }
 
-    private void helpMessageReceived(long chatId, String userName) {
+    private void helpCommandReceived(long chatId, String userName) {
         sendMessage(chatId, EmojiParser.parseToUnicode(HELP_TEXT));
         log.info("Replied to HELP command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
@@ -320,7 +469,27 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private ReplyKeyboardMarkup keyboardMarkup() {
+    private EditMessageText editMessage(long chatId, int messageId, String textToSend) {
+        EditMessageText message = new EditMessageText();
+
+        message.setChatId(chatId);
+        message.setMessageId(messageId);
+        message.setText(textToSend);
+
+        return message;
+    }
+    private EditMessageText editMessage(long chatId, int messageId, String textToSend, InlineKeyboardMarkup inlineKeyboardMarkup) {
+        EditMessageText message = new EditMessageText();
+
+        message.setChatId(chatId);
+        message.setMessageId(messageId);
+        message.setText(textToSend);
+        message.setReplyMarkup(inlineKeyboardMarkup);
+
+        return message;
+    }
+
+    private ReplyKeyboardMarkup replyKeyboardMarkup() {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setResizeKeyboard(true);
         keyboardMarkup.setSelective(true);
@@ -331,9 +500,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         KeyboardRow row1 = new KeyboardRow();
         row1.add("/start");
         row1.add("/help");
-        row1.add("/mydata");
+        row1.add("/my_data");
         KeyboardRow row2 = new KeyboardRow();
-        row2.add("/deletemydata");
+        row2.add("/edit_edu_info");
         row2.add("/settings");
 
         keyboardRows.add(row1);

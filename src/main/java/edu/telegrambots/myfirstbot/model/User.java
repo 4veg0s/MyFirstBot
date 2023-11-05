@@ -7,13 +7,14 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.sql.Timestamp;
 
-// TODO: починить таблицу(некоторые аттрибуты не добавились)
 @Getter
 @Setter
+@ToString
 @Entity(name = "usersDataTable")
 public class User {
     @Id
@@ -23,24 +24,6 @@ public class User {
     private String userName;
     @CreationTimestamp
     private Timestamp registeredAt;
-    private int course;
-    private String faculty;
-    private String group;
     @Enumerated(EnumType.STRING)
     private UserState state;
-
-    @Override
-    public String toString() {
-        return "User{" +
-                "chatId=" + chatId +
-                ", firstName='" + firstName + '\'' +
-                ", lastName='" + lastName + '\'' +
-                ", userName='" + userName + '\'' +
-                ", registeredAt=" + registeredAt +
-                ", course=" + course +
-                ", faculty='" + faculty + '\'' +
-                ", group='" + group + '\'' +
-                ", state=" + state +
-                '}';
-    }
 }
