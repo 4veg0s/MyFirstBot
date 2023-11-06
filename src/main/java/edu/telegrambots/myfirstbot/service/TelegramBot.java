@@ -42,18 +42,19 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     List<Long> superUsers;
     List<BotCommand> listOfCommands;
-    // TODO реализовать вывод данных из обоих таблиц
-    static final String MY_DATA_TEMPLATE = "Ваши данные:%n%n" +
+    static final String MY_DATA_TEMPLATE_BOT_INFO = "Ваши пользовательские данные:%n%n" +
             "ID чата: %d%n" +
             "Имя: %s%n" +
             "Фамилия: %s%n" +
             "Имя пользователя: %s%n%n" +
-            // FIXME инфа о факультете и т.д.
-            "Время последней регистрации в боте: %s";
-            /*"Факультет: %s%n" +
+            "Время последней регистрации в боте: %s%n";
+
+    static final String MY_DATA_TEMPLATE_EDU_INFO = "Ваши студенческие данные:%n%n" +
             "Уровень образования: %s%n" +
+            "Факультет: %s%n" +
             "Курс: %d%n" +
-            "Группа: %s%n" +*/
+            "Группа: %s%n";
+
     static final String START_TEXT = "Привет, %s! Или мне называть тебя @%s?%n%n" +
             "На данный момент бот может корректно реагировать только на команды, доступные из меню";
     static final String HELP_TEXT = "Самый быстрый и доступный частный VPN :zap:Blitz:zap:\n" +
@@ -78,7 +79,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         listOfCommands.add(new BotCommand("/start", "начать общение"));
         listOfCommands.add(new BotCommand("/edit_edu_info", "изменить учебную информацию"));
         listOfCommands.add(new BotCommand("/my_data", "просмотреть собранные данные"));
-        //listOfCommands.add(new BotCommand("/delete_my_data", "удалить собранные данные"));
+        listOfCommands.add(new BotCommand("/delete_my_data", "удалить собранные данные"));
         listOfCommands.add(new BotCommand("/help", "справочная информация о боте"));
         listOfCommands.add(new BotCommand("/settings", "персонализированная настройка"));
         listOfCommands.add(new BotCommand("/cancel", "отмена выполняемой команды"));
@@ -100,8 +101,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             switch (messageText) {
                 case "/start" -> {
-                    startCommandReceived(chatId, update.getMessage().getChat().getFirstName(), update.getMessage().getChat().getUserName());
-                    registerUser(update.getMessage());
+                    startCommandReceived(update);
                 }
                 case "/edit_edu_info" -> {
                     editEduInfoCommandReceived(chatId);
@@ -380,19 +380,30 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void startCommandReceived(long chatId, String name, String userName) {
+    private void startCommandReceived(Update update) {
+        long chatId = update.getMessage().getChatId();
+        String name = update.getMessage().getChat().getFirstName();
+        String userName = update.getMessage().getChat().getUserName();
         String startResponse = String.format(START_TEXT, name, userName);
 
         sendMessage(chatId, startResponse, replyKeyboardMarkup());
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
+
+        registerUser(update.getMessage());
     }
 
     private void myDataCommandReceived(long chatId, String userName) {
         if (userRepository.findById(chatId).isEmpty()) {
-            sendMessage(chatId, "Записей о Ваших данных не обнаружено");
+            sendMessage(chatId, "Записей о Ваших пользовательских данных не обнаружено");
         } else {
             User user = findUserInUserRepository(chatId);
-            sendMessage(chatId, String.format(MY_DATA_TEMPLATE, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
+            sendMessage(chatId, String.format(MY_DATA_TEMPLATE_BOT_INFO, user.getChatId(), user.getFirstName(), user.getLastName(), user.getUserName(), user.getRegisteredAt()));
+        }
+        if (userEduInfoRepository.findById(chatId).isEmpty()) {
+            sendMessage(chatId, "Записей о Ваших студенческих данных не обнаружено");
+        } else {
+            UserEduInfo userEduInfo = findUserInUserEduInfoRepository(chatId);
+            sendMessage(chatId, String.format(MY_DATA_TEMPLATE_EDU_INFO, userEduInfo.getDegree(), userEduInfo.getFaculty(), userEduInfo.getCourse(), userEduInfo.getGroupName()));
         }
         log.info("Replied to MY_DATA command from user https://t.me/" + userName + " with chatId = " + chatId);
     }
