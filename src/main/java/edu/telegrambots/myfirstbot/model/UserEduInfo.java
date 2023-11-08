@@ -13,8 +13,8 @@ import lombok.ToString;
 public class UserEduInfo {
     @Id
     private Long chatId;
-    private String faculty;
-    private String degree;
-    private Integer course;
-    private String groupName;
+    private String faculty = "не указан";
+    private String degree = "не указан";
+    private String course = "не указан";
+    private String groupName = "не указана";
 }

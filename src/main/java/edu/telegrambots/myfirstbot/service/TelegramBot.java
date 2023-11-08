@@ -29,6 +29,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/* TODO:
+    --реализовать вывод сообщения "сейчас нет ни одной активной команды при нажатии /cancel с помощью проверки состояния пользователя
+*   --реализовать отдельное редактирование факультета и тд
+*   --добавить специалитет в degree
+*/
+
 
 @Slf4j
 @Component
@@ -52,10 +58,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     static final String MY_DATA_TEMPLATE_EDU_INFO = "Ваши студенческие данные:%n%n" +
             "Уровень образования: %s%n" +
             "Факультет: %s%n" +
-            "Курс: %d%n" +
+            "Курс: %s%n" +
             "Группа: %s%n";
 
-    static final String START_TEXT = "Привет, %s! Или мне называть тебя @%s?%n%n" +
+    static final String START_TEXT = "Здравствуй, %s!" +
             "На данный момент бот может корректно реагировать только на команды, доступные из меню";
     static final String HELP_TEXT = "Самый быстрый и доступный частный VPN :zap:Blitz:zap:\n" +
             "Для подключения обращайтесь в личные сообщения @VPN_Blitz\n\n" +
@@ -136,6 +142,12 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case CallbackConstants.NO_FACULTY -> {
                     returnToFaculty(update);
                 }
+                case CallbackConstants.YES_DEGREE -> {
+                    confirmDegree(update);
+                }
+                case CallbackConstants.NO_DEGREE -> {
+                    returnToDegree(update);
+                }
                 case CallbackConstants.YES_CANCEL -> {
                     confirmCancel(update);
                 }
@@ -153,6 +165,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                             CallbackConstants.FACULTY_ICE.equals(callbackData)) {
                         facultyReceived(update);
                     }
+                    if (CallbackConstants.DEGREE_BACHELOR.equals(callbackData) ||
+                            CallbackConstants.DEGREE_MASTER.equals(callbackData)) {
+                        degreeReceived(update);
+                    }
                 }
             }
         }
@@ -161,9 +177,9 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void returnToFaculty(Update update) {
         EditMessageText message = editMessage(update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), "Выбор отменен");
         executeMessage(message);
-        editEduInfoCommandReceived(update.getCallbackQuery().getMessage().getChatId());
+        editFacultyMessage(update.getCallbackQuery().getMessage().getChatId());
+        //editEduInfoCommandReceived(update.getCallbackQuery().getMessage().getChatId());
     }
-
     private void confirmFaculty(Update update) {
         EditMessageText message;
         long chatId = update.getCallbackQuery().getMessage().getChatId();
@@ -174,6 +190,30 @@ public class TelegramBot extends TelegramLongPollingBot {
             message = editMessage(chatId, messageId, String.format(textToSend, faculty));
         } catch (NullPointerException exception) {
             message = editMessage(chatId, messageId, "Ошибка изменения факультета");
+            log.error("Couldn't find user in userEduInfoRepository with chatId = " + chatId);
+        }
+        executeMessage(message);
+
+        editDegreeMessage(chatId);     // запуск выбора уровня образования после успешного выбора факультета
+    }
+
+    private void returnToDegree(Update update) {
+        EditMessageText message = editMessage(update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), "Выбор отменен");
+        executeMessage(message);
+        editDegreeMessage(update.getCallbackQuery().getMessage().getChatId());
+        //editEduInfoCommandReceived(update.getCallbackQuery().getMessage().getChatId());
+    }
+
+    private void confirmDegree(Update update) {
+        EditMessageText message;
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        String textToSend = "Уровень образовательной программы изменен на %s";
+        try {
+            String degree = findUserInUserEduInfoRepository(chatId).getDegree();
+            message = editMessage(chatId, messageId, String.format(textToSend, degree));
+        } catch (NullPointerException exception) {
+            message = editMessage(chatId, messageId, "Ошибка изменения уровня образования");
             log.error("Couldn't find user in userEduInfoRepository with chatId = " + chatId);
         }
         executeMessage(message);
@@ -191,6 +231,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         var user = findUserInUserEduInfoRepository(chatId);
         if (user != null) {
             user.setFaculty(faculty);
+            userEduInfoRepository.save(user);
+        }
+    }
+
+    private void changeUserDegree(long chatId, String degree) {
+        var user = findUserInUserEduInfoRepository(chatId);
+        if (user != null) {
+            user.setDegree(degree);
             userEduInfoRepository.save(user);
         }
     }
@@ -225,6 +273,18 @@ public class TelegramBot extends TelegramLongPollingBot {
         executeMessage(message);
     }
 
+    private void degreeReceived(Update update) {
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+        String callbackData = update.getCallbackQuery().getData();
+        String textToSend = "%s, верно?";
+        String degree = degreeCallbackToName(callbackData);
+        changeUserDegree(chatId, degree);
+
+        EditMessageText message = editMessage(chatId, messageId, String.format(textToSend, degree), yesNoInlineMarkup(CallbackConstants.YES_DEGREE, CallbackConstants.NO_DEGREE));
+        executeMessage(message);
+    }
+
     private String facultyCallbackToName(String callbackData) {
         String faculty = "ОШИБКА";
         switch (callbackData) {
@@ -240,8 +300,36 @@ public class TelegramBot extends TelegramLongPollingBot {
         return faculty;
     }
 
+    private String degreeCallbackToName(String callbackData) {
+        String degree = "ОШИБКА";
+        switch (callbackData) {
+            case CallbackConstants.DEGREE_BACHELOR -> degree = "Бакалавриат";
+            case CallbackConstants.DEGREE_MASTER -> degree = "Магистратура";
+        }
+        return degree;
+    }
+
     private void editEduInfoCommandReceived(long chatId) {
+        editFacultyMessage(chatId);
+    }
+
+    private void editDegreeMessage(long chatId) {
+        sendMessage(chatId, "Выберите уровень образовательной программы:", degreeInlineMarkup());
+    }
+
+    private void editFacultyMessage(long chatId) {
         sendMessage(chatId, "Выберите факультет:", facultyInlineMarkup());
+    }
+
+    private InlineKeyboardMarkup degreeInlineMarkup() {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Бакалавриат", CallbackConstants.DEGREE_BACHELOR))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Магистратура", CallbackConstants.DEGREE_MASTER))));
+
+        keyboardMarkup.setKeyboard(rowsInline);
+
+        return keyboardMarkup;
     }
 
     private InlineKeyboardMarkup facultyInlineMarkup() {
@@ -384,12 +472,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
         String name = update.getMessage().getChat().getFirstName();
         String userName = update.getMessage().getChat().getUserName();
-        String startResponse = String.format(START_TEXT, name, userName);
+        //String startResponse = String.format(START_TEXT, name, userName);
+        String startResponse = String.format(START_TEXT, name);
 
         sendMessage(chatId, startResponse, replyKeyboardMarkup());
         log.info("Replied to START command from user https://t.me/" + userName + " with chatId = " + chatId);
 
         registerUser(update.getMessage());
+        editEduInfoCommandReceived(chatId);
     }
 
     private void myDataCommandReceived(long chatId, String userName) {
@@ -489,6 +579,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         return message;
     }
+
     private EditMessageText editMessage(long chatId, int messageId, String textToSend, InlineKeyboardMarkup inlineKeyboardMarkup) {
         EditMessageText message = new EditMessageText();
 
