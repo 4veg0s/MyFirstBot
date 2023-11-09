@@ -5,6 +5,7 @@ public class CallbackConstants {
     public static final String NO_DELETE_MY_DATA = "NO_DELETE_MY_DATA";
     public static final String YES_CANCEL = "YES_CANCEL";
     public static final String NO_CANCEL = "NO_CANCEL";
+    public static final String INLINE_CANCEL = "INLINE_CANCEL";
 
     // ВЫБОР ФАКУЛЬТЕТА
     public static final String YES_FACULTY = "YES_FACULTY";
@@ -24,6 +25,7 @@ public class CallbackConstants {
     public static final String FACULTY_ICE = "FACULTY_ICE";         // ИДО - институт дополнительного образования
 
     // УРОВЕНЬ ОБРАЗОВАНИЯ
-    public static final String DEGREE_BACHELOR = "DEGREE_BACHELOR"; // бакалавр
-    public static final String DEGREE_MASTER = "DEGREE_MASTER";     // магистр
+    public static final String DEGREE_BACHELOR = "DEGREE_BACHELOR"; // бакалавриат
+    public static final String DEGREE_SPECIALITY = "DEGREE_SPECIALITY"; // сппециалитет
+    public static final String DEGREE_MASTER = "DEGREE_MASTER";     // магистратура
 }

@@ -20,8 +20,8 @@ public class User {
     @Id
     private Long chatId;
     private String firstName;
-    private String lastName;
-    private String userName;
+    private String lastName = "не указана";
+    private String userName = "не указано";
     @CreationTimestamp
     private Timestamp registeredAt;
     @Enumerated(EnumType.STRING)

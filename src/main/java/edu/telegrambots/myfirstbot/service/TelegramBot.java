@@ -32,7 +32,6 @@ import java.util.List;
 /* TODO:
     --реализовать вывод сообщения "сейчас нет ни одной активной команды при нажатии /cancel с помощью проверки состояния пользователя
 *   --реализовать отдельное редактирование факультета и тд
-*   --добавить специалитет в degree
 */
 
 
@@ -130,6 +129,9 @@ public class TelegramBot extends TelegramLongPollingBot {
             String callbackData = update.getCallbackQuery().getData();
 
             switch (callbackData) {
+                case CallbackConstants.INLINE_CANCEL -> {
+                    inlineCancel(update);
+                }
                 case CallbackConstants.YES_DELETE_MY_DATA -> {
                     confirmDeleteMyData(update);
                 }
@@ -166,12 +168,23 @@ public class TelegramBot extends TelegramLongPollingBot {
                         facultyReceived(update);
                     }
                     if (CallbackConstants.DEGREE_BACHELOR.equals(callbackData) ||
+                            CallbackConstants.DEGREE_SPECIALITY.equals(callbackData) ||
                             CallbackConstants.DEGREE_MASTER.equals(callbackData)) {
                         degreeReceived(update);
                     }
                 }
             }
         }
+    }
+
+    private void inlineCancel(Update update) {
+        EditMessageText message;
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        int messageId = update.getCallbackQuery().getMessage().getMessageId();
+
+        message = editMessage(chatId, messageId, "Выполнение отменено");
+        setUserState(chatId, UserState.BASIC_STATE);
+        executeMessage(message);
     }
 
     private void returnToFaculty(Update update) {
@@ -304,6 +317,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         String degree = "ОШИБКА";
         switch (callbackData) {
             case CallbackConstants.DEGREE_BACHELOR -> degree = "Бакалавриат";
+            case CallbackConstants.DEGREE_SPECIALITY -> degree = "Специалитет";
             case CallbackConstants.DEGREE_MASTER -> degree = "Магистратура";
         }
         return degree;
@@ -315,17 +329,23 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void editDegreeMessage(long chatId) {
         sendMessage(chatId, "Выберите уровень образовательной программы:", degreeInlineMarkup());
+        setUserState(chatId, UserState.WAITING_FOR_DEGREE);
     }
 
     private void editFacultyMessage(long chatId) {
         sendMessage(chatId, "Выберите факультет:", facultyInlineMarkup());
+        setUserState(chatId, UserState.WAITING_FOR_FACULTY);
+
     }
 
     private InlineKeyboardMarkup degreeInlineMarkup() {
         InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
         rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Бакалавриат", CallbackConstants.DEGREE_BACHELOR))));
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Специалитет", CallbackConstants.DEGREE_SPECIALITY))));
         rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Магистратура", CallbackConstants.DEGREE_MASTER))));
+
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Отмена", CallbackConstants.INLINE_CANCEL))));
 
         keyboardMarkup.setKeyboard(rowsInline);
 
@@ -343,6 +363,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ФСЭиПСТ", CallbackConstants.FACULTY_FFLCT))));
         rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ИБФО", CallbackConstants.FACULTY_IPTS))));
         rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("ИДО", CallbackConstants.FACULTY_ICE))));
+
+        rowsInline.add(new ArrayList<>(Arrays.asList(createInlineButton("Отмена", CallbackConstants.INLINE_CANCEL))));
 
         keyboardMarkup.setKeyboard(rowsInline);
 
@@ -426,6 +448,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else {
             sendMessage(chatId, "К сожалению, я пока не умею обрабатывать данную команду :(");
         }
+        
     }
 
     private void sendToEveryoneMessageReceived(long chatId, String userName, String messageText) {
