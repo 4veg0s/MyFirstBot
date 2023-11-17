@@ -2,6 +2,7 @@ package edu.telegrambots.myfirstbot.service;
 
 import com.vdurmont.emoji.EmojiParser;
 import edu.telegrambots.myfirstbot.config.BotConfig;
+import edu.telegrambots.myfirstbot.enums.CallbackConstants;
 import edu.telegrambots.myfirstbot.enums.UserState;
 import edu.telegrambots.myfirstbot.model.User;
 import edu.telegrambots.myfirstbot.model.UserEduInfo;

@@ -1,4 +1,4 @@
-package edu.telegrambots.myfirstbot.service;
+package edu.telegrambots.myfirstbot.enums;
 
 public class CallbackConstants {
     public static final String YES_DELETE_MY_DATA = "YES_DELETE_MY_DATA";
